@@ -2,101 +2,139 @@
 
 local players = workspace.Players
 local camera = workspace.CurrentCamera
-
---// services
-
 local run_service = game:GetService("RunService")
 local teams = game:GetService("Teams")
 local plr_service = game:GetService("Players")
 local user_input_service = game:GetService("UserInputService")
 
---// tables
-
-local features = {
-    chams = {enabled = true, color = {fill = Color3.fromRGB(255, 0, 0), 
-    outline = Color3.fromRGB(255, 255, 255)}, 
-    transparency = {fill = 0.7, outline = 0.4}},
-}
-
 --// instances
 
 local crosshair_dot = Drawing.new("Circle")
-crosshair_dot.Radius = 1
+crosshair_dot.Size = 2
 crosshair_dot.Color = Color3.fromRGB(255, 0, 0) -- Red dot
 crosshair_dot.Thickness = 1
 crosshair_dot.Filled = true
 crosshair_dot.Visible = true
 
---// functions
+local crosshair_line = Drawing.new("Line")
+crosshair_line.Color = Color3.fromRGB(255, 0, 0)
+crosshair_line.Thickness = 1
+crosshair_line.Visible = true
 
-function is_ally(player)
-    if not player then
-        return false
-    end
+--// variables
 
-    local helmet = player:FindFirstChildWhichIsA("Folder") and player:FindFirstChildWhichIsA("Folder"):FindFirstChildOfClass("MeshPart")
-    if not helmet then
-        return false
-    end
+local player = plr_service.LocalPlayer
+local targetTeammates = true  -- Initially, target non-teammates or teammate
+local aimbotActive = true  -- Initial state of the aimbot
+local right_mouse_down = false
 
-    if helmet.BrickColor == BrickColor.new("Black") then
-        return teams.Phantoms == plr_service.LocalPlayer.Team
-    end
-
-    return teams.Ghosts == plr_service.LocalPlayer.Team
+-- Function to check if a player is a teammate
+local function isTeammate(targetPlayer)
+    return targetPlayer.Team == player.Team
 end
 
-function get_players()
-    local entity_list = {}
+-- Function to look at a specific position
+local function lookAt(targetPosition)
+    camera.CFrame = CFrame.new(camera.CFrame.Position, targetPosition)
+end
 
-    for _, team in players:GetChildren() do
-        for _, player in team:GetChildren() do
-            if player:IsA("Model") and not is_ally(player) then
-                entity_list[#entity_list+1] = player
+-- Function to check if a target is visible (not behind walls)
+local function isTargetVisible(targetPart)
+    local origin = camera.CFrame.Position
+    local direction = (targetPart.Position - origin).Unit
+    local ray = Ray.new(origin, direction * 5000)
+    local part, position = workspace:FindPartOnRayWithIgnoreList(ray, {player.Character, camera})
+    
+    return part and part:IsDescendantOf(targetPart.Parent)
+end
+
+-- Function to get the closest player to the local player
+local function getClosestPlayer(trg_part)
+    local nearest = nil
+    local lastDistance = math.huge
+    local localPlayerPos = player.Character.PrimaryPart.Position
+    
+    for _, v in pairs(game.Players:GetPlayers()) do
+        if v ~= player and v.Character and v.Character:FindFirstChild(trg_part) and v.Character:FindFirstChild("Humanoid") then
+            local head = v.Character[trg_part]
+            local humanoid = v.Character.Humanoid
+            if head and humanoid.Health > 0 then  -- Check if the target is alive
+                local distance = (localPlayerPos - head.Position).Magnitude
+                
+                -- Check visibility, distance, and teammate status
+                if distance < lastDistance and isTargetVisible(head) then
+                    if (targetTeammates and isTeammate(v)) or (not targetTeammates and not isTeammate(v)) then
+                        nearest = v
+                        lastDistance = distance
+                    end
+                end
             end
         end
     end
-
-    return entity_list
+    
+    return nearest
 end
 
-function add_chams(adornee)
+-- Toggle function to switch between targeting teammates and non-teammates
+local function toggleTargetMode()
+    targetTeammates = not targetTeammates
+    print("Targeting", targetTeammates and "teammates" or "non-teammates")
+end
+
+-- Function to toggle aimbot activation
+local function toggleAimbot()
+    aimbotActive = not aimbotActive
+    print("Aimbot", aimbotActive and "enabled" or "disabled")
+end
+
+-- Function to add chams
+local function add_chams(adornee)
     local highlight = Instance.new("Highlight", adornee)
-    highlight.FillColor = features.chams.color.fill
-    highlight.OutlineColor = features.chams.color.outline
-    highlight.FillTransparency = features.chams.transparency.fill
-    highlight.OutlineTransparency = features.chams.transparency.outline
+    highlight.FillColor = Color3.fromRGB(255, 0, 0) -- Solid red color
+    highlight.OutlineColor = Color3.fromRGB(255, 0, 0) -- Optional: same red for outline
+    highlight.FillTransparency = 0 -- Solid, no transparency
+    highlight.OutlineTransparency = 1 -- Optional: fully transparent outline
 end
 
-function get_character(player)
-    local char = {
-        head = nil,
-        torso = nil,
-    }
-
-    for _, bodypart in player:GetChildren() do
-        if bodypart:IsA("BasePart") or bodypart:IsA("MeshPart") then
-            if bodypart.Size == Vector3.new(1, 1, 1) then
-                char.head = bodypart
-            elseif bodypart.Size == Vector3.new(2, 2, 1) then
-                char.torso = bodypart
-            end
+-- Input handling
+user_input_service.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if input.KeyCode == Enum.KeyCode.T then
+            toggleTargetMode()
+        elseif input.KeyCode == Enum.KeyCode.Y then
+            toggleAimbot()
         end
     end
+end)
 
-    return char
-end
+-- Mobile support for toggling aimbot and targeting mode
+local UIS = game:GetService("UserInputService")
 
---// logic
+UIS.TouchTap:Connect(function(touchPositions, processed)
+    if not processed then
+        local touch = touchPositions[1]
+        if touch.Position.Y < camera.ViewportSize.Y / 2 then
+            toggleAimbot()
+        else
+            toggleTargetMode()
+        end
+    end
+end)
 
+-- RenderStepped connection to perform aiming
 run_service.RenderStepped:Connect(function()
-    for _, player in get_players() do
-        if player and player:FindFirstChildWhichIsA("Model") and not player:FindFirstChildWhichIsA("Highlight") then
-            if features.chams.enabled then
-                add_chams(player)
+    crosshair_dot.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    
+    if aimbotActive then
+        local closestPlayer = getClosestPlayer("Head")
+        if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
+            lookAt(closestPlayer.Character.Head.Position)
+            
+            local target_pos, on_screen = camera:WorldToScreenPoint(closestPlayer.Character.Head.Position)
+            if on_screen then
+                crosshair_line.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+                crosshair_line.To = Vector2.new(target_pos.X, target_pos.Y)
             end
         end
     end
-
-    crosshair_dot.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 end)
