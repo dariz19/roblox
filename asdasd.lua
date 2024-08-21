@@ -21,7 +21,7 @@ local features = {
 --// instances
 
 local crosshair_dot = Drawing.new("Circle")
-crosshair_dot.Radius = 3
+crosshair_dot.Radius = 100
 crosshair_dot.Color = Color3.fromRGB(255, 0, 0) -- Red dot
 crosshair_dot.Thickness = 1
 crosshair_dot.Filled = true
