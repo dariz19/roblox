@@ -14,8 +14,8 @@ local user_input_service = game:GetService("UserInputService")
 
 local features = {
     chams = {enabled = true, color = {fill = Color3.fromRGB(255, 0, 0), 
-    outline = Color3.fromRGB(255, 255, 255)}, 
-    transparency = {fill = 1, outline = 0.4}},
+    outline = Color3.fromRGB(255, 0, 0)}, 
+    transparency = {fill = 1, outline = 0.2}},
 }
 
 --// instances
